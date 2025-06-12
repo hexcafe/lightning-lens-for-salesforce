@@ -1,0 +1,38 @@
+diff --git a/node_modules/jsforce/browser/browser/.request.js.~undo-tree~ b/node_modules/jsforce/browser/browser/.request.js.~undo-tree~
+new file mode 100644
+index 0000000..cc68bfb
+--- /dev/null
++++ b/node_modules/jsforce/browser/browser/.request.js.~undo-tree~
+@@ -0,0 +1,19 @@
++(undo-tree-save-format-version . 1)
++"adb3b8dfa7f671da4d8d447ff412e41a843d923b"
++[nil nil nil nil (26696 42419 889886 0) 0 nil]
++([nil nil ((16521 . 16525) (#("  " 0 2 (fontified nil)) . 16521) (16527 . 16529) (#("(" 0 1 (fontified nil)) . -16527) (16527 . 16528) (t 26696 38874 685839 61000)) nil (26696 42441 51846 0) 0 nil] [nil nil ((#("window" 0 6 (fontified t)) . -16534) (undo-tree-id0 . -6) 16540 (t 26696 38874 685839 61000)) ((16534 . 16540)) (26696 42419 567911 0) 0 nil])
++([nil nil ((#(")" 0 1 (fontified t)) . 16530)) nil (26696 42441 51845 0) 0 nil])
++([nil nil ((16534 . 16536)) ((#("gl" 0 2 (fontified t)) . 16534) (undo-tree-id1 . -2)) (26696 42419 567804 0) 0 nil])
++([nil nil ((#(" " 0 1 (fontified t)) . 16523) (#(" " 0 1 (fontified t)) . 16523)) nil (26696 42441 51845 0) 0 nil])
++nil
++([nil nil ((16521 . 16525) (#("  " 0 2 (fontified nil)) . 16521) (16596 . 16597)) nil (26696 42441 51843 0) 0 nil])
++([nil nil ((#(")" 0 1 (fontified nil)) . 16604) (16603 . 16604) (16602 . 16604) (#("(" 0 1 (fontified nil)) . -16602) (16598 . 16603)) nil (26696 42441 51958 0) 0 nil])
++([nil nil ((nil rear-nonsticky nil 16669 . 16670) (nil fontified nil 16660 . 16670) (nil fontified nil 16642 . 16660) (nil fontified nil 16636 . 16642) (nil fontified nil 16632 . 16636) (nil fontified nil 16621 . 16632) (nil fontified nil 16616 . 16621) (nil fontified nil 16610 . 16616) (nil fontified nil 16609 . 16610) (nil fontified nil 16603 . 16609) (16603 . 16670)) nil (26696 42451 899977 0) 0 nil] [nil nil ((nil rear-nonsticky nil 16668 . 16669) (nil fontified nil 16659 . 16669) (nil fontified nil 16641 . 16659) (nil fontified nil 16635 . 16641) (nil fontified nil 16631 . 16635) (nil fontified nil 16620 . 16631) (nil fontified nil 16615 . 16620) (nil fontified nil 16609 . 16615) (nil fontified nil 16608 . 16609) (nil fontified nil 16602 . 16608) (16602 . 16669)) ((#("typeof window !== 'undefined' && typeof window.fetch === 'function'" 0 6 (face font-lock-keyword-face fontified nil) 6 7 (fontified nil) 7 13 (fontified nil) 13 18 (fontified nil) 18 29 (face font-lock-string-face fontified nil) 29 33 (fontified nil) 33 39 (face font-lock-keyword-face fontified nil) 39 57 (fontified nil) 57 66 (face font-lock-string-face fontified nil) 66 67 (face font-lock-string-face rear-nonsticky nil fontified nil)) . 16602) (undo-tree-id2 . -67) (nil rear-nonsticky t 16668 . 16669)) (26696 42441 51833 0) 0 nil])
++([nil nil ((#("window" 0 6 (fontified t)) . -16610) (undo-tree-id4 . -6) 16616) nil (26696 42451 899976 0) 0 nil])
++nil
++([nil nil ((16613 . 16616) (16610 . 16610) (16610 . 16613)) nil (26696 42451 899974 0) 0 nil])
++([nil nil ((#("window" 0 6 (fontified t)) . -16643) (undo-tree-id3 . -6) 16649) nil (26696 42451 899973 0) 0 nil])
++([nil nil ((16646 . 16646) (16646 . 16649) (16643 . 16643) (16643 . 16646)) nil (26696 42451 899957 0) 0 nil])
++([nil nil ((#(" " 0 1 (fontified t)) . 16521) (#(" " 0 1 (fontified t)) . 16521)) nil (26696 42451 899954 0) 0 nil])
++([nil current ((41521 . 41522) 16735) nil (26696 42451 899947 0) 0 nil])
++nil
+diff --git a/node_modules/jsforce/browser/browser/request.js b/node_modules/jsforce/browser/browser/request.js
+index b118fee..8c7c68e 100644
+--- a/node_modules/jsforce/browser/browser/request.js
++++ b/node_modules/jsforce/browser/browser/request.js
+@@ -403,7 +403,7 @@ export default function request(req) {
+     input = _createHttpRequestHan.input,
+     output = _createHttpRequestHan.output,
+     stream = _createHttpRequestHan.stream;
+-  if (typeof window !== 'undefined' && typeof window.fetch === 'function') {
++  if ((typeof window !== 'undefined' && typeof window.fetch === 'function') || (typeof global !== 'undefined' && typeof global.fetch === 'function')) {
+     startFetchRequest(req, options, input, output, stream);
+   } else {
+     startXmlHttpRequest(req, options, input, output, stream);
