@@ -21,7 +21,7 @@ import {
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
 import { parseDate, parseDateTime } from "@internationalized/date";
-import { client } from "./service";
+import { client } from "../services/client";
 
 // Helper function to render the correct input type based on field metadata
 const renderField = (

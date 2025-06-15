@@ -10,8 +10,13 @@ export default defineManifest({
   },
   web_accessible_resources: [
     {
-      resources: ["index.html"],
+      resources: [
+        "index.html",
+        "logo.png",
+        "public/inject.js"
+      ],
       matches: [
+        "https://*.salesforce-setup.com/*",
         "https://*.salesforce.com/*",
         "https://*.force.com/*",
         "https://*.visualforce.com/*",
@@ -21,6 +26,7 @@ export default defineManifest({
   content_scripts: [
     {
       matches: [
+        "https://*.salesforce-setup.com/*",
         "https://*.salesforce.com/*",
         "https://*.force.com/*",
         "https://*.visualforce.com/*",
@@ -32,8 +38,9 @@ export default defineManifest({
     service_worker: "src/background/index.ts",
     type: "module",
   },
-  permissions: ["cookies", "storage", "tabs", "debugger"],
+  permissions: ["storage", "cookies"],
   host_permissions: [
+    "https://*.salesforce-setup.com/",
     "https://*.salesforce.com/",
     "https://*.force.com/",
     "https://*.visualforce.com/",

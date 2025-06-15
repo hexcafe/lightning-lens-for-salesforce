@@ -12,10 +12,6 @@ import {
   Chip,
   Spinner,
   Tooltip,
-  Dropdown,
-  DropdownTrigger,
-  DropdownMenu,
-  DropdownItem,
   Input,
   Pagination,
   Tabs,
@@ -27,32 +23,51 @@ import {
   ScrollShadow,
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { client } from "./service";
+import { client } from "../services/client";
 import hljs from "highlight.js/lib/core";
 import json from "highlight.js/lib/languages/json";
 import "highlight.js/styles/github.css"; // Base style for light mode
 
 // Register JSON language with highlight.js
 hljs.registerLanguage("json", json);
+const MAX_DISPLAY_BYTES = 1024 * 10; // 10KB
+
+const isTooLarge = (data: any) => {
+  debugger;
+  try {
+    const str = typeof data === "string" ? data : JSON.stringify(data, null, 2);
+    // TextEncoder is ~2× faster than Blob for byte-length.
+    return new TextEncoder().encode(str).length > MAX_DISPLAY_BYTES;
+  } catch {
+    return false;
+  }
+};
 
 // Define types for API call data
 interface ApiCall {
   id: string; // Now a UUID string, not auto-incrementing
   tabId: number; // The ID of the tab that originated the call
+  auraActionId?: string;
+  scope?: string;
+  functionName: string;
+  name: string;
+  requestPayload: any;
+  responsePayload: any;
+  state: "SUCCESS" | "ERROR";
+  errors: any[];
   requestedAt: number; // Timestamp when the request was made
   respondedAt: number; // Timestamp when the response was received
   duration: number; // The difference in milliseconds
-  requestPayload: any;
-  responsePayload: any;
-  status: "Success" | "Error";
-  type: "ApexAction" | "RecordUi" | "Other"; // The type of API call
 
-  // Add these fields to maintain compatibility with existing component
-  url: string;
-  method: string;
-  requestHeaders: Record<string, string>;
-  responseHeaders: Record<string, string>;
-  timestamp: number; // We'll use requestedAt for this
+  // Keep these for backward compatibility
+  type?: "ApexAction" | "RecordUi" | "Other"; // The type of API call
+  params?: any;
+  returnValue?: any;
+  url?: string;
+  method?: string;
+  requestHeaders?: Record<string, string>;
+  responseHeaders?: Record<string, string>;
+  timestamp?: number; // We'll use requestedAt for this
   requestBody?: any; // We'll map from requestPayload
   responseBody?: any; // We'll map from responsePayload
   error?: string;
@@ -61,112 +76,58 @@ interface ApiCall {
   description?: string;
 }
 
-// Move the generateApiCallDescription function outside and before the component
-// Add a function to generate descriptive names for API calls
-const generateApiCallDescription = (call: ApiCall): string => {
-  try {
-    if (call.type === "ApexAction") {
-      // For Apex calls, show namespace.classname.method
-      const params =
-        typeof call.requestPayload === "string"
-          ? JSON.parse(call.requestPayload).params
-          : call.requestPayload?.params;
-
-      if (params) {
-        return `${params.namespace || ""}.${params.classname || ""}.${params.method || ""}`;
-      }
-    } else if (call.type === "RecordUi") {
-      // For RecordUI calls, show the action and recordId/object type
-      const descriptor =
-        typeof call.requestPayload === "string"
-          ? JSON.parse(call.requestPayload).descriptor
-          : call.requestPayload?.descriptor;
-
-      const params =
-        typeof call.requestPayload === "string"
-          ? JSON.parse(call.requestPayload).params
-          : call.requestPayload?.params;
-
-      if (descriptor && params) {
-        // Extract the action name from the descriptor (e.g., getRecordWithFields)
-        const actionMatch = descriptor.match(/ACTION\$([^\/]+)/);
-        const action = actionMatch ? actionMatch[1] : "";
-
-        // Get recordId and determine object type if possible
-        const recordId = params.recordId || "";
-        let objectType = "";
-
-        if (params.fields && params.fields.length > 0) {
-          // Try to extract object type from fields like "Opportunity.Id"
-          const fieldParts = params.fields[0].split(".");
-          if (fieldParts.length > 1) {
-            objectType = fieldParts[0];
-          }
-        }
-
-        return `${action}${objectType ? ` (${objectType})` : ""} ${recordId}`;
-      }
-    }
-
-    return call.type;
-  } catch (err) {
-    console.error("Error generating description:", err);
-    return call.type;
-  }
-};
-
-// Format JSON with proper indentation and filter content based on API call type
-const formatJson = (data: any, isRequest: boolean) => {
-  try {
-    let jsonData = data;
-
-    // Parse string data if needed
-    if (typeof data === "string") {
-      jsonData = JSON.parse(data);
-    }
-
-    // For all API calls, filter to show only relevant parts
-    if (isRequest && jsonData.params) {
-      // For request, only show params object
-      return JSON.stringify(jsonData.params, null, 2);
-    } else if (!isRequest && jsonData.returnValue) {
-      // For response, only show returnValue
-      // Handle different return value structures
-      if (jsonData.returnValue.returnValue !== undefined) {
-        return JSON.stringify(jsonData.returnValue.returnValue, null, 2);
-      } else {
-        return JSON.stringify(jsonData.returnValue, null, 2);
-      }
-    }
-
-    // Default: return the full formatted JSON
-    return JSON.stringify(jsonData, null, 2);
-  } catch (e) {
-    // If parsing fails, return as is
-    return typeof data === "string" ? data : String(data);
-  }
-};
-
-// Highlight JSON using highlight.js
-const highlightJson = (jsonString: string) => {
-  try {
-    const highlighted = hljs.highlight(jsonString, {
-      language: "json",
-    }).value;
-    return highlighted;
-  } catch (e) {
-    console.error("Error highlighting JSON:", e);
-    return jsonString;
-  }
-};
-
 // Component to display request/response details
 const ApiCallDetails = ({ apiCall }: { apiCall: ApiCall }) => {
   // Add state for copy feedback
   const [copiedRequest, setCopiedRequest] = React.useState(false);
   const [copiedResponse, setCopiedResponse] = React.useState(false);
 
-  // Copy functions with visual feedback - update to use the filtered JSON
+  // Format JSON with proper indentation and filter content based on API call type
+  const formatJson = (data: any, isRequest: boolean) => {
+    try {
+      let jsonData = data;
+
+      // Parse string data if needed
+      if (typeof data === "string") {
+        jsonData = JSON.parse(data);
+      }
+
+      // For ApexActionController, show specific parts
+      if (
+        apiCall.scope === "ApexActionController" ||
+        apiCall.functionName?.includes("ApexActionController")
+      ) {
+        if (isRequest && jsonData.params) {
+          // For request, show params object
+          return JSON.stringify(jsonData.params, null, 2);
+        } else if (!isRequest && jsonData.returnValue) {
+          // For response, show returnValue
+          return JSON.stringify(jsonData.returnValue, null, 2);
+        }
+      }
+
+      // Default: return the full formatted JSON
+      return JSON.stringify(jsonData, null, 2);
+    } catch (e) {
+      // If parsing fails, return as is
+      return typeof data === "string" ? data : String(data);
+    }
+  };
+
+  // Highlight JSON using highlight.js
+  const highlightJson = (jsonString: string) => {
+    try {
+      const highlighted = hljs.highlight(jsonString, {
+        language: "json",
+      }).value;
+      return highlighted;
+    } catch (e) {
+      console.error("Error highlighting JSON:", e);
+      return jsonString;
+    }
+  };
+
+  // Copy functions with visual feedback - update to use the new structure
   const copyRequestPayload = () => {
     try {
       const payload = formatJson(apiCall.requestPayload, true);
@@ -295,7 +256,7 @@ const ApiCallDetails = ({ apiCall }: { apiCall: ApiCall }) => {
               height={16}
               className="text-primary"
             />
-            Request Params
+            Request Payload
           </h3>
           <Tooltip content={copiedRequest ? "Copied!" : "Copy (Alt+R)"}>
             <Button
@@ -317,14 +278,23 @@ const ApiCallDetails = ({ apiCall }: { apiCall: ApiCall }) => {
         <Card className="bg-content2">
           <CardBody className="p-2">
             {apiCall.requestPayload ? (
-              <pre
-                className="text-xs font-mono whitespace-pre-wrap break-all overflow-auto max-h-[200px] p-1 hljs"
-                dangerouslySetInnerHTML={{
-                  __html: highlightJson(
-                    formatJson(apiCall.requestPayload, true),
-                  ),
-                }}
-              />
+              isTooLarge(apiCall.requestPayload) ? (
+                <div className="text-xs text-default-400 italic">
+                  Payload &gt; 1 KB – omitted for performance.
+                  <Button variant="light" onPress={copyRequestPayload}>
+                    Copy anyway
+                  </Button>
+                </div>
+              ) : (
+                <pre
+                  className="text-xs font-mono whitespace-pre-wrap break-all overflow-auto max-h-[200px] p-1 hljs"
+                  dangerouslySetInnerHTML={{
+                    __html: highlightJson(
+                      formatJson(apiCall.requestPayload, /* isRequest */ true),
+                    ),
+                  }}
+                />
+              )
             ) : (
               <div className="text-xs text-default-400">
                 No request payload available
@@ -344,7 +314,7 @@ const ApiCallDetails = ({ apiCall }: { apiCall: ApiCall }) => {
               height={16}
               className="text-success"
             />
-            Response Return Value
+            Response Payload
           </h3>
           <Tooltip content={copiedResponse ? "Copied!" : "Copy (Alt+S)"}>
             <Button
@@ -366,14 +336,23 @@ const ApiCallDetails = ({ apiCall }: { apiCall: ApiCall }) => {
         <Card className="bg-content2">
           <CardBody className="p-2">
             {apiCall.responsePayload ? (
-              <pre
-                className="text-xs font-mono whitespace-pre-wrap break-all overflow-auto max-h-[200px] p-1 hljs"
-                dangerouslySetInnerHTML={{
-                  __html: highlightJson(
-                    formatJson(apiCall.responsePayload, false),
-                  ),
-                }}
-              />
+              isTooLarge(apiCall.responsePayload) ? (
+                <div className="text-xs text-default-400 italic">
+                  Payload &gt; 10 KB – omitted for performance.
+                  <Button variant="light" onPress={copyResponsePayload}>
+                    Copy anyway
+                  </Button>
+                </div>
+              ) : (
+                <pre
+                  className="text-xs font-mono whitespace-pre-wrap break-all overflow-auto max-h-[200px] p-1 hljs"
+                  dangerouslySetInnerHTML={{
+                    __html: highlightJson(
+                      formatJson(apiCall.responsePayload, false),
+                    ),
+                  }}
+                />
+              )
             ) : (
               <div className="text-xs text-default-400">
                 No response payload available
@@ -384,7 +363,7 @@ const ApiCallDetails = ({ apiCall }: { apiCall: ApiCall }) => {
       </div>
 
       {/* Error (if any) */}
-      {apiCall.error && (
+      {(apiCall.errors?.length > 0 || apiCall.error) && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-danger flex items-center gap-2">
             <Icon icon="lucide:alert-triangle" width={16} height={16} />
@@ -393,7 +372,11 @@ const ApiCallDetails = ({ apiCall }: { apiCall: ApiCall }) => {
           <Card className="bg-danger-50 dark:bg-danger-900/20">
             <CardBody className="p-2">
               <pre className="text-xs font-mono text-danger whitespace-pre-wrap break-all">
-                {apiCall.error}
+                {apiCall.errors?.length > 0
+                  ? JSON.stringify(apiCall.errors, null, 2)
+                  : typeof apiCall.error === "string"
+                    ? apiCall.error
+                    : JSON.stringify(apiCall.error)}
               </pre>
             </CardBody>
           </Card>
@@ -404,13 +387,21 @@ const ApiCallDetails = ({ apiCall }: { apiCall: ApiCall }) => {
 };
 
 export default function RequestsLog() {
+  // Add a ref for the container
+  const containerRef = React.useRef<HTMLDivElement>(null);
+
   const [apiCalls, setApiCalls] = React.useState<ApiCall[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   // Remove viewMode state and add filterType state
   const [filterType, setFilterType] = React.useState<
-    "all" | "RecordUi" | "ApexAction"
-  >("all");
+    | "all"
+    | "ApexActionController"
+    | "ActionsController"
+    | "RecordUiController"
+    | "ListUiController"
+    | "RelatedListUiController"
+  >("ApexActionController");
   const [searchTerm, setSearchTerm] = React.useState("");
   const [page, setPage] = React.useState(1);
   const rowsPerPage = 10;
@@ -424,13 +415,10 @@ export default function RequestsLog() {
       // Only fetch current tab's API calls
       const calls = await client.listApiCalls();
 
-      // Add descriptions to each call
-      const enhancedCalls = calls.map((call) => ({
-        ...call,
-        description: generateApiCallDescription(call),
-      }));
+      console.log(JSON.stringify(calls, null, 2));
 
-      setApiCalls(enhancedCalls);
+      // No need to process calls as the new schema already has the needed fields
+      setApiCalls(calls);
     } catch (err) {
       const errorMessage =
         err instanceof Error ? err.message : "Failed to fetch API calls";
@@ -487,7 +475,10 @@ export default function RequestsLog() {
 
     // Filter by type if not "all"
     if (filterType !== "all") {
-      filtered = filtered.filter((call) => call.type === filterType);
+      filtered = filtered.filter(
+        (call) =>
+          call.scope === filterType || call.functionName?.includes(filterType),
+      );
     }
 
     // Then filter by search term if present
@@ -495,10 +486,10 @@ export default function RequestsLog() {
       const lowerSearchTerm = searchTerm.toLowerCase();
       filtered = filtered.filter(
         (call) =>
-          call.type.toLowerCase().includes(lowerSearchTerm) ||
-          String(call.status).includes(lowerSearchTerm) ||
-          (call.description &&
-            call.description.toLowerCase().includes(lowerSearchTerm)),
+          (call.name && call.name.toLowerCase().includes(lowerSearchTerm)) ||
+          (call.functionName &&
+            call.functionName.toLowerCase().includes(lowerSearchTerm)) ||
+          String(call.state).toLowerCase().includes(lowerSearchTerm),
       );
     }
 
@@ -517,61 +508,6 @@ export default function RequestsLog() {
     return new Date(timestamp).toLocaleString();
   };
 
-  // Copy payload functions
-  const handleCopyRequestPayload = (call: ApiCall) => {
-    try {
-      const payload = formatJson(call.requestPayload, true);
-
-      navigator.clipboard
-        .writeText(payload)
-        .then(() => {
-          addToast({
-            title: "Copied",
-            description: "Request payload copied to clipboard",
-            color: "success",
-            icon: <Icon icon="lucide:clipboard-check" width={16} height={16} />,
-          });
-        })
-        .catch((err) => {
-          throw err;
-        });
-    } catch (err) {
-      addToast({
-        title: "Error",
-        description: "Failed to copy request payload",
-        color: "danger",
-        icon: <Icon icon="lucide:alert-triangle" width={16} height={16} />,
-      });
-    }
-  };
-
-  const handleCopyResponsePayload = (call: ApiCall) => {
-    try {
-      const payload = formatJson(call.responsePayload, false);
-
-      navigator.clipboard
-        .writeText(payload)
-        .then(() => {
-          addToast({
-            title: "Copied",
-            description: "Response payload copied to clipboard",
-            color: "success",
-            icon: <Icon icon="lucide:clipboard-check" width={16} height={16} />,
-          });
-        })
-        .catch((err) => {
-          throw err;
-        });
-    } catch (err) {
-      addToast({
-        title: "Error",
-        description: "Failed to copy response payload",
-        color: "danger",
-        icon: <Icon icon="lucide:alert-triangle" width={16} height={16} />,
-      });
-    }
-  };
-
   if (isLoading && apiCalls.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-6">
@@ -582,67 +518,75 @@ export default function RequestsLog() {
   }
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full overflow-hidden" ref={containerRef}>
       {/* Header Section */}
-      <Card className="rounded-none shadow-none border-b border-t-0 border-x-0 bg-content1 dark:bg-content1 dark:border-default-100">
-        <CardBody className="py-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <Icon icon="lucide:activity" className="text-primary text-xl" />
-              <div>
-                <h1 className="text-lg font-semibold">API Requests Log</h1>
-                <p className="text-sm text-default-500">
-                  Monitor and inspect Salesforce API calls
-                </p>
+      <div className="flex-shrink-0">
+        <Card className="rounded-none shadow-none border-b border-t-0 border-x-0 bg-content1 dark:bg-content1 dark:border-default-100">
+          <CardBody className="py-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Icon icon="lucide:activity" className="text-primary text-xl" />
+                <div>
+                  <h1 className="text-lg font-semibold">API Requests Log</h1>
+                  <p className="text-sm text-default-500">
+                    Monitor and inspect Salesforce API calls
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Tooltip content="Refresh">
+                  <Button
+                    isIconOnly
+                    variant="light"
+                    onPress={fetchApiCalls}
+                    isLoading={isLoading}
+                  >
+                    <Icon
+                      icon="lucide:refresh-cw"
+                      className="text-default-500"
+                    />
+                  </Button>
+                </Tooltip>
+                <Button
+                  color="danger"
+                  variant="flat"
+                  onPress={handleClearCalls}
+                  startContent={<Icon icon="lucide:trash-2" />}
+                >
+                  Clear Log
+                </Button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Tooltip content="Refresh">
-                <Button
-                  isIconOnly
-                  variant="light"
-                  onPress={fetchApiCalls}
-                  isLoading={isLoading}
-                >
-                  <Icon icon="lucide:refresh-cw" className="text-default-500" />
-                </Button>
-              </Tooltip>
-              <Button
-                color="danger"
-                variant="flat"
-                onPress={handleClearCalls}
-                startContent={<Icon icon="lucide:trash-2" />}
-              >
-                Clear Log
-              </Button>
-            </div>
-          </div>
-        </CardBody>
-      </Card>
+          </CardBody>
+        </Card>
+      </div>
 
       {/* Filters and Search */}
-      <div className="px-4 py-3 border-b dark:border-default-100">
+      <div className="px-4 py-3 border-b dark:border-default-100 flex-shrink-0">
         <div className="flex flex-col sm:flex-row gap-3 justify-between items-start sm:items-center">
           {/* Replace viewMode buttons with filter type tabs */}
-          <div className="flex gap-2">
+          <ScrollShadow orientation="horizontal" className="w-full sm:w-auto">
             <Tabs
               aria-label="Filter API calls"
               selectedKey={filterType}
               onSelectionChange={(key) =>
-                setFilterType(key as "all" | "RecordUi" | "ApexAction")
+                setFilterType(key as typeof filterType)
               }
               variant="light"
               size="sm"
               classNames={{
-                tabList: "gap-2",
-                tab: "px-3 py-1",
+                tabList: "gap-2 flex-nowrap overflow-x-auto",
+                tab: "px-3 py-1 whitespace-nowrap",
               }}
             >
               <Tab key="all" title="All" />
-              <Tab key="RecordUi" title="RecordUI" />
-              <Tab key="ApexAction" title="Apex" />
+              <Tab key="ApexActionController" title="Apex" />
+              <Tab key="ActionsController" title="Actions" />
+              <Tab key="RecordUiController" title="Record UI" />
+              <Tab key="ListUiController" title="List UI" />
+              <Tab key="RelatedListUiController" title="Related List UI" />
             </Tabs>
-          </div>
+          </ScrollShadow>
 
           <Input
             type="text"
@@ -664,7 +608,7 @@ export default function RequestsLog() {
         </div>
       </div>
 
-      {/* Main Content - Update ScrollShadow and Table configuration */}
+      {/* Main Content - Update Table configuration */}
       <ScrollShadow className="flex-grow overflow-auto" hideScrollBar={false}>
         <div className="p-4">
           {error ? (
@@ -707,17 +651,18 @@ export default function RequestsLog() {
                 isHeaderSticky
                 classNames={{
                   base: "overflow-auto max-h-[calc(100vh-280px)]",
-                  th: "bg-default-100/50 dark:bg-default-50/20 text-default-600 sticky top-0 z-10",
+                  th: "bg-default-100/50 dark:bg-default-50/20 sticky top-0 z-10",
+                  // th: "bg-default-100 dark:bg-default-800 text-default-600 sticky top-0 z-10", // Changed from bg-default-100/50 dark:bg-default-50/20
                   table: "min-w-full",
                 }}
               >
                 <TableHeader>
-                  <TableColumn key="type" width={100}>
-                    TYPE
+                  <TableColumn key="scope" width={100}>
+                    SCOPE
                   </TableColumn>
-                  <TableColumn key="description">DESCRIPTION</TableColumn>
-                  <TableColumn key="status" width={100}>
-                    STATUS
+                  <TableColumn key="name">NAME</TableColumn>
+                  <TableColumn key="state" width={100}>
+                    STATE
                   </TableColumn>
                   <TableColumn key="timestamp" width={180}>
                     TIMESTAMP
@@ -733,6 +678,7 @@ export default function RequestsLog() {
                     ACTIONS
                   </TableColumn>
                 </TableHeader>
+
                 <TableBody emptyContent="No API calls found">
                   {paginatedCalls.map((call) => (
                     <TableRow
@@ -743,21 +689,23 @@ export default function RequestsLog() {
                         <Chip
                           variant="flat"
                           color={
-                            call.type === "ApexAction"
+                            call.scope === "ApexActionController"
                               ? "primary"
-                              : call.type === "RecordUi"
+                              : call.scope === "ListUiController"
                                 ? "success"
                                 : "default"
                           }
                           size="sm"
                         >
-                          {call.type}
+                          {call.scope ||
+                            call.functionName?.split(".")[0] ||
+                            "Unknown"}
                         </Chip>
                       </TableCell>
                       <TableCell>
-                        <Tooltip content={call.description || call.type}>
-                          <span className="text-xs font-mono truncate block max-w-[300px]">
-                            {call.description || call.type}
+                        <Tooltip content={call.name || call.functionName}>
+                          <span className="text-xs font-mono truncate block max-w-[350px]">
+                            {call.name || call.functionName}
                           </span>
                         </Tooltip>
                       </TableCell>
@@ -765,11 +713,11 @@ export default function RequestsLog() {
                         <Chip
                           variant="flat"
                           color={
-                            call.status === "Success" ? "success" : "danger"
+                            call.state === "SUCCESS" ? "success" : "danger"
                           }
                           size="sm"
                         >
-                          {call.status}
+                          {call.state}
                         </Chip>
                       </TableCell>
                       <TableCell>
@@ -796,48 +744,6 @@ export default function RequestsLog() {
                               <ApiCallDetails apiCall={call} />
                             </PopoverContent>
                           </Popover>
-
-                          <Dropdown>
-                            <DropdownTrigger>
-                              <Button isIconOnly size="sm" variant="light">
-                                <Icon
-                                  icon="lucide:more-vertical"
-                                  width={16}
-                                  height={16}
-                                />
-                              </Button>
-                            </DropdownTrigger>
-                            <DropdownMenu aria-label="API Call Actions">
-                              <DropdownItem
-                                key="copy-request"
-                                startContent={
-                                  <Icon
-                                    icon="lucide:copy"
-                                    width={16}
-                                    height={16}
-                                  />
-                                }
-                                onPress={() => handleCopyRequestPayload(call)}
-                                isDisabled={!call.requestPayload}
-                              >
-                                Copy Request Payload
-                              </DropdownItem>
-                              <DropdownItem
-                                key="copy-response"
-                                startContent={
-                                  <Icon
-                                    icon="lucide:clipboard"
-                                    width={16}
-                                    height={16}
-                                  />
-                                }
-                                onPress={() => handleCopyResponsePayload(call)}
-                                isDisabled={!call.responsePayload}
-                              >
-                                Copy Response Payload
-                              </DropdownItem>
-                            </DropdownMenu>
-                          </Dropdown>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -850,23 +756,20 @@ export default function RequestsLog() {
       </ScrollShadow>
 
       {/* Pagination */}
-      {filteredCalls.length > 0 && (
-        <div className="flex justify-between items-center px-4 py-3 border-t dark:border-default-100">
-          <span className="text-small text-default-500">
-            Showing{" "}
-            {Math.min(filteredCalls.length, (page - 1) * rowsPerPage + 1)} to{" "}
-            {Math.min(filteredCalls.length, page * rowsPerPage)} of{" "}
-            {filteredCalls.length} entries
-          </span>
-          <Pagination
-            total={pages}
-            page={page}
-            onChange={setPage}
-            showControls
-            size="sm"
-          />
-        </div>
-      )}
+      <div className="flex justify-between items-center px-4 py-3 border-t dark:border-default-100 flex-shrink-0">
+        <span className="text-small text-default-500">
+          Showing {Math.min(filteredCalls.length, (page - 1) * rowsPerPage + 1)}{" "}
+          to {Math.min(filteredCalls.length, page * rowsPerPage)} of{" "}
+          {filteredCalls.length} entries
+        </span>
+        <Pagination
+          total={pages}
+          page={page}
+          onChange={setPage}
+          showControls
+          size="sm"
+        />
+      </div>
     </div>
   );
 }

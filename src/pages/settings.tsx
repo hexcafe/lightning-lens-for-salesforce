@@ -13,7 +13,7 @@ import {
   Slider,
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
-import { client } from "./service";
+import { client } from "../services/client";
 
 export default function SettingsPage() {
   const [isLwcDebugEnabled, setIsLwcDebugEnabled] =
@@ -113,7 +113,7 @@ export default function SettingsPage() {
   // Update handleClearData to use clearAllApiCalls
   const handleClearData = React.useCallback(async () => {
     try {
-      await client.clearAllApiCalls();
+      await client.clearApiCalls();
       addToast({
         title: "Success",
         description: "All request data has been cleared",
