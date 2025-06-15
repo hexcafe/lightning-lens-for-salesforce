@@ -147,7 +147,6 @@ export async function initializeFloatingButton(root: ShadowRoot) {
 
 /** ======== Bootstrap ======== */
 (async () => {
-  console.log("inject apex caller");
   injectScript("public/inject.js");
 
   const host = document.createElement("div");

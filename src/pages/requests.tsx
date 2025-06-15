@@ -33,7 +33,6 @@ hljs.registerLanguage("json", json);
 const MAX_DISPLAY_BYTES = 1024 * 10; // 10KB
 
 const isTooLarge = (data: any) => {
-  debugger;
   try {
     const str = typeof data === "string" ? data : JSON.stringify(data, null, 2);
     // TextEncoder is ~2× faster than Blob for byte-length.
@@ -414,8 +413,6 @@ export default function RequestsLog() {
     try {
       // Only fetch current tab's API calls
       const calls = await client.listApiCalls();
-
-      console.log(JSON.stringify(calls, null, 2));
 
       // No need to process calls as the new schema already has the needed fields
       setApiCalls(calls);
