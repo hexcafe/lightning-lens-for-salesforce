@@ -167,7 +167,8 @@ export default function SoqlQueryPage() {
       if (!word || (word.from === word.to && !context.explicit)) return null;
       const options: Completion[] = fields.map((f) => ({
         label: f,
-        type: "property",
+        // Use the 'variable' type to avoid the default empty-square icon
+        type: "variable",
       }));
       return { from: word.from, options };
     };
@@ -182,14 +183,15 @@ export default function SoqlQueryPage() {
       const opts: Completion[] = results.map((o: any) => ({
         label: o.name,
         info: o.label,
-        type: "variable",
+        // Show a circle icon for SObject names
+        type: "class",
       }));
       return { from: word.from, options: opts };
     };
 
     return autocompletion({
       override: [fieldProvider, objectProvider],
-      icons: false,
+      icons: true,
     });
   }, [fields]);
 
