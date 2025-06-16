@@ -11,6 +11,8 @@
   const RETRIES = 20;
   const INTERVAL = 500;
 
+  const fastClone = (v) => JSON.parse(JSON.stringify(v));
+
   // ───────── helper to find dot‑paths for a given function name ─────────
   const findPaths = (root, name, seen = new Set()) => {
     if (!root || typeof root !== "object" || seen.has(root)) return [];
@@ -59,7 +61,7 @@
             scope,
             functionName,
             name: friendlyName,
-            params,
+            params: fastClone(params),
             requestedAt,
           },
         },
@@ -91,8 +93,8 @@
               id: rowId,
               auraActionId,
               state: res?.getState?.() ?? "SUCCESS",
-              returnValue: res?.getReturnValue?.(),
-              errors: res?.getError?.(),
+              returnValue: fastClone(res?.getReturnValue?.()),
+              errors: fastClone(res?.getError?.()),
               requestedAt,
               respondedAt,
             },
