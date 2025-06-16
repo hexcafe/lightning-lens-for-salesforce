@@ -73,6 +73,7 @@ function lruGet(key: string) {
 
 function freshConnection(meta: TabMeta) {
   return new Connection({
+    version: "60.0",
     instanceUrl: meta.instanceUrl,
     sessionId: meta.sessionId,
   });
@@ -240,6 +241,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const desc = await conn.sobject(name).describe();
         lruSet(name, desc);
         return desc;
+      }
+      case "RUN_SOQL": {
+        const q = payload.query;
+        if (!q) throw new Error("query required");
+        const meta = tabMeta.get(tabId);
+        if (!meta) throw new Error("no session");
+        const conn = freshConnection(meta);
+        return conn.query(q);
       }
 
       case "GET_LWC_DEBUG_STATUS": {

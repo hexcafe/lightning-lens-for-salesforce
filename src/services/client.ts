@@ -26,6 +26,10 @@ export class ContentScriptClient {
     return this.sendMessage<any>({ type: "DESCRIBE_SOBJECT", payload: { sObjectName } });
   }
 
+  runSoql(query: string) {
+    return this.sendMessage<any>({ type: "RUN_SOQL", payload: { query } });
+  }
+
   // LWC debug helpers
   getLwcDebugStatus() {
     return this.sendMessage<boolean>({ type: "GET_LWC_DEBUG_STATUS" });
