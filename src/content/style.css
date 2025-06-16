@@ -82,3 +82,51 @@
     height: 100%;
     border: none;
 }
+
+.sfdc-companion-modal-header {
+    height: 2rem;
+    background-color: #f7f7f7;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    cursor: move;
+    user-select: none;
+    padding: 0 0.5rem;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+.dock-btn {
+    margin-right: auto;
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: #6c757d;
+}
+.dock-btn:hover {
+    color: #343a40;
+}
+
+.sfdc-companion-modal-overlay.docked {
+    background-color: transparent;
+    align-items: stretch;
+    justify-content: stretch;
+}
+
+.dock-left, .dock-right {
+    width: 360px;
+    height: 100vh;
+    border-radius: 0;
+    top: 0;
+}
+
+.dock-bottom {
+    width: 100vw;
+    height: 40vh;
+    border-radius: 0;
+    left: 0;
+}
+
+.dock-left { left: 0; }
+.dock-right { right: 0; }
+.dock-bottom { bottom: 0; }

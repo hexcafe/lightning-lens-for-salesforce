@@ -9,6 +9,8 @@ interface DragStart extends Position {
   initialY: number;
 }
 
+type DockState = "undocked" | "left" | "right" | "bottom";
+
 /** Injects a page-scope script from your extension. */
 function injectScript(path: string): void {
   const s = document.createElement("script");
@@ -47,6 +49,11 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   let dragStart!: DragStart;
   const CLICK_THRESHOLD = 5; // px
 
+  let modalDragStart!: DragStart;
+  let isModalDragging = false;
+  let modalPos = { x: 0, y: 0 };
+  let dockState: DockState = "undocked";
+
   // Create button
   const btn = document.createElement("button");
   btn.className = "sfdc-companion-button";
@@ -66,7 +73,10 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   overlay.style.display = "none";
   overlay.innerHTML = /* html */ `
     <div class="sfdc-companion-modal-content">
-      <button class="close-btn">&times;</button>
+      <div class="sfdc-companion-modal-header">
+        <button class="dock-btn" title="Toggle Dock">\u2399</button>
+        <button class="close-btn">&times;</button>
+      </div>
       <main class="sfdc-companion-modal-body">
         <iframe allow="clipboard-read; clipboard-write"
                 src="${chrome.runtime.getURL("index.html")}"></iframe>
@@ -80,10 +90,37 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     ".sfdc-companion-modal-content",
   )!;
   const closeBtn = overlay.querySelector<HTMLButtonElement>(".close-btn")!;
+  const dockBtn = overlay.querySelector<HTMLButtonElement>(".dock-btn")!;
+  const modalHeader = overlay.querySelector<HTMLDivElement>(
+    ".sfdc-companion-modal-header",
+  )!;
+
+  function applyDock() {
+    modalContent.classList.remove("dock-left", "dock-right", "dock-bottom");
+    overlay.classList.toggle("docked", dockState !== "undocked");
+    if (dockState === "left") {
+      modalContent.classList.add("dock-left");
+    } else if (dockState === "right") {
+      modalContent.classList.add("dock-right");
+    } else if (dockState === "bottom") {
+      modalContent.classList.add("dock-bottom");
+    } else {
+      Object.assign(modalContent.style, {
+        left: `${modalPos.x}px`,
+        top: `${modalPos.y}px`,
+      });
+    }
+  }
 
   const openModal = () => {
     overlay.style.display = "flex";
     document.body.style.overflow = "hidden";
+    dockState = "undocked";
+    modalPos = {
+      x: (window.innerWidth - modalContent.offsetWidth) / 2,
+      y: (window.innerHeight - modalContent.offsetHeight) / 2,
+    };
+    applyDock();
   };
   const closeModal = () => {
     overlay.style.display = "none";
@@ -131,6 +168,43 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     if (!didMove) openModal();
   });
 
+  // ===== Modal dragging =====
+  modalHeader.addEventListener("pointerdown", (e) => {
+    if (dockState !== "undocked") return;
+    isModalDragging = true;
+    modalDragStart = {
+      x: e.clientX,
+      y: e.clientY,
+      initialX: modalPos.x,
+      initialY: modalPos.y,
+    };
+    modalHeader.setPointerCapture(e.pointerId);
+  });
+
+  modalHeader.addEventListener("pointermove", (e) => {
+    if (!isModalDragging || dockState !== "undocked") return;
+    const dx = e.clientX - modalDragStart.x;
+    const dy = e.clientY - modalDragStart.y;
+    modalPos.x = modalDragStart.initialX + dx;
+    modalPos.y = modalDragStart.initialY + dy;
+    modalContent.style.left = `${modalPos.x}px`;
+    modalContent.style.top = `${modalPos.y}px`;
+  });
+
+  modalHeader.addEventListener("pointerup", (e) => {
+    if (!isModalDragging) return;
+    modalHeader.releasePointerCapture(e.pointerId);
+    isModalDragging = false;
+  });
+
+  // Cycle docking positions
+  const dockOrder: DockState[] = ["undocked", "right", "bottom", "left"];
+  dockBtn.addEventListener("click", () => {
+    const idx = dockOrder.indexOf(dockState);
+    dockState = dockOrder[(idx + 1) % dockOrder.length];
+    applyDock();
+  });
+
   // Modal close handlers
   closeBtn.addEventListener("click", closeModal);
   overlay.addEventListener("click", closeModal);
@@ -142,6 +216,18 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     position.y = Math.min(window.innerHeight - btn.offsetHeight, position.y);
     btn.style.left = `${position.x}px`;
     btn.style.top = `${position.y}px`;
+    if (dockState === "undocked") {
+      modalPos.x = Math.min(
+        window.innerWidth - modalContent.offsetWidth,
+        Math.max(0, modalPos.x),
+      );
+      modalPos.y = Math.min(
+        window.innerHeight - modalContent.offsetHeight,
+        Math.max(0, modalPos.y),
+      );
+      modalContent.style.left = `${modalPos.x}px`;
+      modalContent.style.top = `${modalPos.y}px`;
+    }
   });
 }
 
