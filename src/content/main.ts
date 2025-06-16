@@ -41,9 +41,40 @@ function savePosition(pos: Position): Promise<void> {
   return chrome.storage.local.set({ buttonPosition: pos });
 }
 
+interface ModalState {
+  dockState: DockState;
+  modalPos: Position;
+  undockedSize: { width: number; height: number };
+  dockWidth: number;
+  dockHeight: number;
+}
+
+async function getStoredModalState(): Promise<ModalState | null> {
+  return new Promise((resolve) =>
+    chrome.storage.local.get("modalState", (res) => {
+      const s = res.modalState as ModalState | undefined;
+      if (
+        s &&
+        s.modalPos &&
+        typeof s.modalPos.x === "number" &&
+        typeof s.modalPos.y === "number"
+      ) {
+        resolve(s);
+      } else {
+        resolve(null);
+      }
+    }),
+  );
+}
+
+function saveModalState(state: ModalState): Promise<void> {
+  return chrome.storage.local.set({ modalState: state });
+}
+
 /** Builds and wires up the draggable button + modal. */
 export async function initializeFloatingButton(root: ShadowRoot) {
   const position = await getStoredPosition();
+  const storedModalState = await getStoredModalState();
   let isDragging = false;
   let didMove = false;
   let dragStart!: DragStart;
@@ -51,11 +82,19 @@ export async function initializeFloatingButton(root: ShadowRoot) {
 
   let modalDragStart!: DragStart;
   let isModalDragging = false;
-  let modalPos = { x: 0, y: 0 };
-  let dockState: DockState = "undocked";
-  let undockedSize = { width: 0, height: 0 };
-  let dockWidth = 360;
-  let dockHeight = Math.round(window.innerHeight * 0.4);
+  let modalPos =
+    storedModalState?.modalPos ?? {
+      x: (window.innerWidth - Math.round(window.innerWidth * 0.8)) / 2,
+      y: (window.innerHeight - Math.round(window.innerHeight * 0.8)) / 2,
+    };
+  let dockState: DockState = storedModalState?.dockState ?? "undocked";
+  let undockedSize =
+    storedModalState?.undockedSize ?? {
+      width: Math.round(window.innerWidth * 0.8),
+      height: Math.round(window.innerHeight * 0.8),
+    };
+  let dockWidth = storedModalState?.dockWidth ?? 360;
+  let dockHeight = storedModalState?.dockHeight ?? Math.round(window.innerHeight * 0.4);
   let isResizing = false;
   let resizeStart!: { x: number; y: number; width: number; height: number };
 
@@ -148,21 +187,17 @@ export async function initializeFloatingButton(root: ShadowRoot) {
 
   const openModal = () => {
     overlay.style.display = "block";
-    dockState = "undocked";
-    undockedSize = {
-      width: Math.round(window.innerWidth * 0.8),
-      height: Math.round(window.innerHeight * 0.8),
-    };
-    modalContent.style.width = `${undockedSize.width}px`;
-    modalContent.style.height = `${undockedSize.height}px`;
-    modalPos = {
-      x: (window.innerWidth - undockedSize.width) / 2,
-      y: (window.innerHeight - undockedSize.height) / 2,
-    };
     applyDock();
   };
   const closeModal = () => {
     overlay.style.display = "none";
+    void saveModalState({
+      dockState,
+      modalPos,
+      undockedSize,
+      dockWidth,
+      dockHeight,
+    });
   };
 
   // Pointer down: begin drag
@@ -235,6 +270,13 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     if (!isModalDragging) return;
     modalHeader.releasePointerCapture(e.pointerId);
     isModalDragging = false;
+    void saveModalState({
+      dockState,
+      modalPos,
+      undockedSize,
+      dockWidth,
+      dockHeight,
+    });
   });
 
   // ===== Modal resizing =====
@@ -274,6 +316,13 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     if (!isResizing) return;
     resizeHandle.releasePointerCapture(e.pointerId);
     isResizing = false;
+    void saveModalState({
+      dockState,
+      modalPos,
+      undockedSize,
+      dockWidth,
+      dockHeight,
+    });
   });
 
   // Docking via buttons
@@ -281,6 +330,13 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     btn.addEventListener("click", () => {
       dockState = btn.dataset.dock as DockState;
       applyDock();
+      void saveModalState({
+        dockState,
+        modalPos,
+        undockedSize,
+        dockWidth,
+        dockHeight,
+      });
     });
   }
 
