@@ -39,7 +39,13 @@ const router = createHashRouter([
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <HeroUIProvider>
-      <ToastProvider placement="top-center" />
+      <ToastProvider
+        placement="top-center"
+        toastProps={{
+          timeout: 2000,
+          shouldShowTimeoutProgress: true,
+        }}
+      />
       <RouterProvider router={router} />
     </HeroUIProvider>
   </StrictMode>,
