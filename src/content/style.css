@@ -62,14 +62,14 @@
     z-index: 10;
     background: none;
     border: none;
-    font-size: 2rem;
+    font-size: 18px;
     cursor: pointer;
-    color: #6c757d;
+    color: #e8eaed;
     line-height: 1;
     padding: 0.25rem;
 }
 .close-btn:hover {
-    color: #343a40;
+    filter: brightness(1.2);
 }
 
 .sfdc-companion-modal-body {
@@ -84,15 +84,17 @@
 }
 
 .sfdc-companion-modal-header {
-    height: 2rem;
-    background-color: #f7f7f7;
+    height: 24px;
+    background-color: #202124;
+    color: #e8eaed;
     display: flex;
     align-items: center;
     justify-content: flex-end;
     cursor: move;
     user-select: none;
     padding: 0 0.5rem;
-    border-bottom: 1px solid #e0e0e0;
+    border-bottom: 1px solid #3c4043;
+    font-size: 12px;
 }
 
 .dock-btn {
@@ -100,33 +102,52 @@
     background: none;
     border: none;
     cursor: pointer;
-    font-size: 1.2rem;
-    color: #6c757d;
+    color: #e8eaed;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .dock-btn:hover {
-    color: #343a40;
+    filter: brightness(1.2);
 }
 
 .sfdc-companion-modal-overlay.docked {
     background-color: transparent;
     align-items: stretch;
     justify-content: stretch;
+    pointer-events: none;
 }
 
-.dock-left, .dock-right {
+.sfdc-companion-modal-overlay.docked .sfdc-companion-modal-content {
+    pointer-events: auto;
+}
+
+.dock-left,
+.dock-right {
     width: 360px;
     height: 100vh;
     border-radius: 0;
     top: 0;
 }
 
+.dock-left {
+    left: 0;
+    border-right: 1px solid #3c4043;
+}
+
+.dock-right {
+    right: 0;
+    border-left: 1px solid #3c4043;
+}
+
 .dock-bottom {
     width: 100vw;
     height: 40vh;
     border-radius: 0;
+    border-top: 1px solid #3c4043;
     left: 0;
 }
 
-.dock-left { left: 0; }
-.dock-right { right: 0; }
-.dock-bottom { bottom: 0; }

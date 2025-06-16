@@ -53,6 +53,13 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   let isModalDragging = false;
   let modalPos = { x: 0, y: 0 };
   let dockState: DockState = "undocked";
+  const dockCycle: DockState[] = ["undocked", "right", "bottom", "left"];
+  const dockIcons: Record<DockState, string> = {
+    undocked: "\u21F6", // dock right
+    right: "\u21F7", // dock bottom
+    bottom: "\u21F5", // dock left
+    left: "\u2B1A", // undock
+  };
 
   // Create button
   const btn = document.createElement("button");
@@ -110,6 +117,9 @@ export async function initializeFloatingButton(root: ShadowRoot) {
         top: `${modalPos.y}px`,
       });
     }
+    const current = dockCycle.indexOf(dockState);
+    const next = dockCycle[(current + 1) % dockCycle.length];
+    dockBtn.textContent = dockIcons[next];
   }
 
   const openModal = () => {
@@ -120,6 +130,7 @@ export async function initializeFloatingButton(root: ShadowRoot) {
       x: (window.innerWidth - modalContent.offsetWidth) / 2,
       y: (window.innerHeight - modalContent.offsetHeight) / 2,
     };
+    dockBtn.textContent = dockIcons[dockCycle[1]];
     applyDock();
   };
   const closeModal = () => {
@@ -198,10 +209,9 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   });
 
   // Cycle docking positions
-  const dockOrder: DockState[] = ["undocked", "right", "bottom", "left"];
   dockBtn.addEventListener("click", () => {
-    const idx = dockOrder.indexOf(dockState);
-    dockState = dockOrder[(idx + 1) % dockOrder.length];
+    const idx = dockCycle.indexOf(dockState);
+    dockState = dockCycle[(idx + 1) % dockCycle.length];
     applyDock();
   });
 
