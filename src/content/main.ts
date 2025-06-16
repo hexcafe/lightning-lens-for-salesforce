@@ -119,23 +119,27 @@ export async function initializeFloatingButton(root: ShadowRoot) {
       modalContent.style.height = "100vh";
       modalContent.style.left = "";
       modalContent.style.top = "";
+      modalContent.style.maxWidth = "";
     } else if (dockState === "right") {
       modalContent.classList.add("dock-right");
       modalContent.style.width = `${dockWidth}px`;
       modalContent.style.height = "100vh";
       modalContent.style.left = "";
       modalContent.style.top = "";
+      modalContent.style.maxWidth = "";
     } else if (dockState === "bottom") {
       modalContent.classList.add("dock-bottom");
       modalContent.style.width = "100vw";
       modalContent.style.height = `${dockHeight}px`;
       modalContent.style.left = "";
       modalContent.style.top = "";
+      modalContent.style.maxWidth = "none";
     } else {
       modalContent.style.width = `${undockedSize.width}px`;
       modalContent.style.height = `${undockedSize.height}px`;
       modalContent.style.left = `${modalPos.x}px`;
       modalContent.style.top = `${modalPos.y}px`;
+      modalContent.style.maxWidth = "1200px";
     }
     for (const btn of dockButtons) {
       btn.classList.toggle("active", btn.dataset.dock === dockState);
