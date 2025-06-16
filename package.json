@@ -1,7 +1,7 @@
 {
   "name": "lightning-lens-for-salesforce",
   "type": "module",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "private": true,
   "license": "GPL-3.0-or-later",
   "scripts": {
