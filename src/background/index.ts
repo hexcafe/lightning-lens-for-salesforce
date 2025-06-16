@@ -241,6 +241,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         lruSet(name, desc);
         return desc;
       }
+      case "RUN_SOQL": {
+        const q = payload.query;
+        if (!q) throw new Error("query required");
+        const meta = tabMeta.get(tabId);
+        if (!meta) throw new Error("no session");
+        const conn = freshConnection(meta);
+        return conn.query(q);
+      }
 
       case "GET_LWC_DEBUG_STATUS": {
         const meta = tabMeta.get(tabId);

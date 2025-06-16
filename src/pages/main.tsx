@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import RecordEditor from "./record-editor";
 import SettingsPage from "./settings";
 import RequestsPage from "./requests";
+import SoqlQueryPage from "./query";
 import { HeroUIProvider } from "@heroui/react";
 import { ToastProvider } from "@heroui/toast";
 import { createHashRouter, RouterProvider, Navigate } from "react-router";
@@ -28,6 +29,7 @@ const router = createHashRouter([
     children: [
       { index: true, element: <Navigate to="/record" replace /> },
       { path: "record", element: <RecordEditor /> },
+      { path: "query", element: <SoqlQueryPage /> },
       { path: "requests", element: <RequestsPage /> },
       { path: "settings", element: <SettingsPage /> },
     ],

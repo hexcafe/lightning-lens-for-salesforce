@@ -26,6 +26,11 @@ const navItems: NavItem[] = [
     icon: "lucide:database",
   },
   {
+    path: "/query",
+    label: "SOQL",
+    icon: "lucide:terminal",
+  },
+  {
     path: "/requests",
     label: "Requests",
     icon: "lucide:send",
