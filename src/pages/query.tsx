@@ -160,40 +160,35 @@ export default function SoqlQueryPage() {
     }
   }, [records]);
 
-  const fieldCompletion = React.useMemo(() => {
-    if (fields.length === 0) return [];
-    const options: Completion[] = fields.map((f) => ({ label: f, type: "property" }));
-    return autocompletion({
-      override: [
-        (context: CompletionContext) => {
-          const word = context.matchBefore(/\w*/);
-          if (!word || (word.from === word.to && !context.explicit)) return null;
-          return { from: word.from, options };
-        },
-      ],
-    });
-  }, [fields]);
+  const completionExtension = React.useMemo(() => {
+    const fieldProvider = (context: CompletionContext) => {
+      if (fields.length === 0) return null;
+      const word = context.matchBefore(/\w*/);
+      if (!word || (word.from === word.to && !context.explicit)) return null;
+      const options: Completion[] = fields.map((f) => ({
+        label: f,
+        type: "property",
+      }));
+      return { from: word.from, options };
+    };
 
-  const objectCompletion = React.useMemo(() => {
-    return autocompletion({
-      override: [
-        async (context: CompletionContext) => {
-          const word = context.matchBefore(/\w*/);
-          if (!word) return null;
-          const prev = context.state.sliceDoc(0, word.from);
-          if (!/(FROM|INTO|UPDATE|DELETE|MERGE)\s*$/i.test(prev)) return null;
-          if (word.from === word.to && !context.explicit) return null;
-          const results = await client.searchGlobalObjects(word.text);
-          const opts: Completion[] = results.map((o: any) => ({
-            label: o.name,
-            info: o.label,
-            type: "variable",
-          }));
-          return { from: word.from, options: opts };
-        },
-      ],
-    });
-  }, []);
+    const objectProvider = async (context: CompletionContext) => {
+      const word = context.matchBefore(/\w*/);
+      if (!word) return null;
+      const prev = context.state.sliceDoc(0, word.from);
+      if (!/(FROM|INTO|UPDATE|DELETE|MERGE)\s*$/i.test(prev)) return null;
+      if (word.from === word.to && !context.explicit) return null;
+      const results = await client.searchGlobalObjects(word.text);
+      const opts: Completion[] = results.map((o: any) => ({
+        label: o.name,
+        info: o.label,
+        type: "variable",
+      }));
+      return { from: word.from, options: opts };
+    };
+
+    return autocompletion({ override: [fieldProvider, objectProvider] });
+  }, [fields]);
 
   const columns = React.useMemo(() => {
     if (records.length === 0) return [];
@@ -390,7 +385,7 @@ export default function SoqlQueryPage() {
             onCreateEditor={(view) => (editorRef.current = view)}
             height="150px"
             theme={vscodeDark}
-            extensions={[sql(), fieldCompletion, objectCompletion]}
+            extensions={[sql(), completionExtension]}
           />
         </div>
         {error && (
