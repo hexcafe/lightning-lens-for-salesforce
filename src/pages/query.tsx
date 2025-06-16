@@ -32,7 +32,9 @@ import {
 import { format as sqlFormat } from "sql-formatter";
 
 export default function SoqlQueryPage() {
-  const [query, setQuery] = React.useState(
+  const QUERY_KEY = "soql_last_query";
+  const [query, setQuery] = React.useState(() =>
+    localStorage.getItem(QUERY_KEY) ||
     "SELECT FIELDS(STANDARD) FROM Account LIMIT 10",
   );
   const [records, setRecords] = React.useState<any[]>([]);
@@ -41,6 +43,31 @@ export default function SoqlQueryPage() {
   const [copied, setCopied] = React.useState(false);
   const [fields, setFields] = React.useState<string[]>([]);
   const editorRef = React.useRef<EditorView | null>(null);
+  const [objectCount, setObjectCount] = React.useState<number | null>(null);
+  const HISTORY_KEY = "soql_history";
+  const [history, setHistory] = React.useState<{ query: string; timestamp: number }[]>(() => {
+    try {
+      const h = localStorage.getItem(HISTORY_KEY);
+      return h ? JSON.parse(h) : [];
+    } catch {
+      return [];
+    }
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+  }, [history]);
+
+  React.useEffect(() => {
+    localStorage.setItem(QUERY_KEY, query);
+  }, [query]);
+
+  React.useEffect(() => {
+    client
+      .loadGlobalObjects()
+      .then((r) => setObjectCount(r.count))
+      .catch(() => setObjectCount(null));
+  }, []);
 
   const objectName = React.useMemo(() => {
     const m = /from\s+([a-zA-Z0-9_]+)/i.exec(query);
@@ -90,6 +117,10 @@ export default function SoqlQueryPage() {
       const result = await client.runSoql(text);
       const recs = (result as any).records ?? result;
       setRecords(recs);
+      setHistory((h) => {
+        const entry = { query: text, timestamp: Date.now() };
+        return [entry, ...h].slice(0, 50);
+      });
     } catch (err) {
       const message = err instanceof Error ? err.message : "Query failed";
       setError(message);
@@ -129,26 +160,40 @@ export default function SoqlQueryPage() {
     }
   }, [records]);
 
-  const completionExtension = React.useMemo(() => {
+  const fieldCompletion = React.useMemo(() => {
     if (fields.length === 0) return [];
-    const options: Completion[] = fields.map((f) => ({
-      label: f,
-      type: "property",
-    }));
+    const options: Completion[] = fields.map((f) => ({ label: f, type: "property" }));
     return autocompletion({
       override: [
         (context: CompletionContext) => {
           const word = context.matchBefore(/\w*/);
-          if (!word || (word.from === word.to && !context.explicit))
-            return null;
-          return {
-            from: word.from,
-            options,
-          };
+          if (!word || (word.from === word.to && !context.explicit)) return null;
+          return { from: word.from, options };
         },
       ],
     });
   }, [fields]);
+
+  const objectCompletion = React.useMemo(() => {
+    return autocompletion({
+      override: [
+        async (context: CompletionContext) => {
+          const word = context.matchBefore(/\w*/);
+          if (!word) return null;
+          const prev = context.state.sliceDoc(0, word.from);
+          if (!/(FROM|INTO|UPDATE|DELETE|MERGE)\s*$/i.test(prev)) return null;
+          if (word.from === word.to && !context.explicit) return null;
+          const results = await client.searchGlobalObjects(word.text);
+          const opts: Completion[] = results.map((o: any) => ({
+            label: o.name,
+            info: o.label,
+            type: "variable",
+          }));
+          return { from: word.from, options: opts };
+        },
+      ],
+    });
+  }, []);
 
   const columns = React.useMemo(() => {
     if (records.length === 0) return [];
@@ -260,6 +305,9 @@ export default function SoqlQueryPage() {
                 <h1 className="text-lg font-semibold">SOQL Query</h1>
                 <p className="text-sm text-default-500">
                   Execute SOQL against the current org
+                  {objectCount !== null && (
+                    <span className="ml-2 text-default-400">{objectCount} objects</span>
+                  )}
                 </p>
               </div>
             </div>
@@ -286,6 +334,39 @@ export default function SoqlQueryPage() {
             >
               Format
             </Button>
+            <Popover placement="bottom-start">
+              <PopoverTrigger>
+                <Button size="sm" variant="flat" startContent={<Icon icon="lucide:history" />}>
+                  History
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="p-2 max-w-sm">
+                {history.length === 0 ? (
+                  <p className="text-default-500 text-sm">No history</p>
+                ) : (
+                  <div className="space-y-1">
+                    {history.map((h, i) => (
+                      <div key={i} className="flex items-center gap-1">
+                        <button
+                          className="text-xs font-mono text-left flex-grow overflow-hidden text-ellipsis"
+                          onClick={() => setQuery(h.query)}
+                        >
+                          {h.query}
+                        </button>
+                        <Button
+                          isIconOnly
+                          size="sm"
+                          variant="light"
+                          onPress={() => setHistory((arr) => arr.filter((_, idx) => idx !== i))}
+                        >
+                          <Icon icon="lucide:trash-2" width={14} height={14} />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
             <Tooltip content={copied ? "Copied!" : "Copy JSON"}>
               <Button
                 isIconOnly
@@ -309,7 +390,7 @@ export default function SoqlQueryPage() {
             onCreateEditor={(view) => (editorRef.current = view)}
             height="150px"
             theme={vscodeDark}
-            extensions={[sql(), completionExtension]}
+            extensions={[sql(), fieldCompletion, objectCompletion]}
           />
         </div>
         {error && (

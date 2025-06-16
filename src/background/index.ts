@@ -30,16 +30,31 @@ export interface AuraRequestLog {
   errors?: any[] | null;
 }
 
+export interface GlobalSObject {
+  name: string;
+  label: string;
+}
+
 class LLensDB extends Dexie {
   public auraRequests!: Table<AuraRequestLog, string>;
+  public globalObjects!: Table<GlobalSObject, string>;
   constructor() {
     super("LightningLensForSalesforceDB");
     this.version(2).stores({
       auraRequests: "id, tabId, auraActionId, scope, functionName, requestedAt",
     });
+    this.version(3).stores({
+      auraRequests:
+        "id, tabId, auraActionId, scope, functionName, requestedAt",
+      globalObjects: "&name,label",
+    });
   }
 }
 const db = new LLensDB();
+let globalObjectsFetchedAt = 0;
+chrome.storage.local.get("globalObjectsFetchedAt").then((res) => {
+  globalObjectsFetchedAt = res.globalObjectsFetchedAt || 0;
+});
 
 // ────────────────────────────────────────────────────────────
 // 2. LIGHT TAB META  +  LRU DESCRIBE CACHE
@@ -77,6 +92,25 @@ function freshConnection(meta: TabMeta) {
     instanceUrl: meta.instanceUrl,
     sessionId: meta.sessionId,
   });
+}
+
+async function ensureGlobalObjects(tabId: number): Promise<number> {
+  const count = await db.globalObjects.count();
+  const stale = Date.now() - globalObjectsFetchedAt > 3600_000;
+  if (count > 0 && !stale) return count;
+  const meta = tabMeta.get(tabId);
+  if (!meta) throw new Error("no session");
+  const conn = freshConnection(meta);
+  const res = await conn.describeGlobal();
+  const objects = (res.sobjects || []).map((s: any) => ({
+    name: s.name,
+    label: s.label,
+  }));
+  await db.globalObjects.clear();
+  await db.globalObjects.bulkAdd(objects);
+  globalObjectsFetchedAt = Date.now();
+  await chrome.storage.local.set({ globalObjectsFetchedAt });
+  return objects.length;
 }
 
 // ────────────────────────────────────────────────────────────
@@ -241,6 +275,20 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const desc = await conn.sobject(name).describe();
         lruSet(name, desc);
         return desc;
+      }
+      case "LOAD_GLOBAL_OBJECTS": {
+        const count = await ensureGlobalObjects(tabId);
+        return { count };
+      }
+      case "SEARCH_GLOBAL_OBJECTS": {
+        const prefix = (payload.prefix || "").toLowerCase();
+        await ensureGlobalObjects(tabId);
+        if (!prefix) return [];
+        return db.globalObjects
+          .where("name")
+          .startsWithIgnoreCase(prefix)
+          .limit(25)
+          .toArray();
       }
       case "RUN_SOQL": {
         const q = payload.query;

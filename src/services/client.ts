@@ -26,6 +26,13 @@ export class ContentScriptClient {
     return this.sendMessage<any>({ type: "DESCRIBE_SOBJECT", payload: { sObjectName } });
   }
 
+  loadGlobalObjects() {
+    return this.sendMessage<{ count: number }>({ type: "LOAD_GLOBAL_OBJECTS" });
+  }
+  searchGlobalObjects(prefix: string) {
+    return this.sendMessage<any[]>({ type: "SEARCH_GLOBAL_OBJECTS", payload: { prefix } });
+  }
+
   runSoql(query: string) {
     return this.sendMessage<any>({ type: "RUN_SOQL", payload: { query } });
   }
