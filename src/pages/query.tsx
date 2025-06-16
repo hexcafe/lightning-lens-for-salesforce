@@ -187,7 +187,10 @@ export default function SoqlQueryPage() {
       return { from: word.from, options: opts };
     };
 
-    return autocompletion({ override: [fieldProvider, objectProvider] });
+    return autocompletion({
+      override: [fieldProvider, objectProvider],
+      icons: false,
+    });
   }, [fields]);
 
   const columns = React.useMemo(() => {
