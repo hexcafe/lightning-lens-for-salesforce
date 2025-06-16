@@ -156,6 +156,7 @@
     border-radius: 0;
     border-top: 1px solid #3c4043;
     left: 0;
+    bottom: 0;
 }
 
 .resize-handle {

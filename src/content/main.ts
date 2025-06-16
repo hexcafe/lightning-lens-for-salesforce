@@ -205,7 +205,8 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   // ===== Modal dragging =====
   modalHeader.addEventListener("pointerdown", (e) => {
     if (dockState !== "undocked") return;
-    if ((e.target as HTMLElement).closest(".dock-btn")) return;
+    const target = e.target as HTMLElement;
+    if (target.closest(".dock-btn") || target.closest(".close-btn")) return;
     isModalDragging = true;
     modalDragStart = {
       x: e.clientX,
