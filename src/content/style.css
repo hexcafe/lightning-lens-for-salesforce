@@ -35,15 +35,12 @@
     position: fixed;
     inset: 0;
     z-index: 100000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
     background-color: transparent;
     pointer-events: none;
 }
 
 .sfdc-companion-modal-content {
-    position: relative; /* Added for positioning the close button */
+    position: fixed;
     width: 80vw;
     height: 80vh;
     max-width: 1200px;
@@ -159,5 +156,37 @@
     border-radius: 0;
     border-top: 1px solid #3c4043;
     left: 0;
+}
+
+.resize-handle {
+    position: absolute;
+    width: 10px;
+    height: 10px;
+    right: 0;
+    bottom: 0;
+    cursor: se-resize;
+    background: transparent;
+}
+
+.dock-left .resize-handle,
+.dock-right .resize-handle {
+    width: 4px;
+    height: 100%;
+    top: 0;
+    cursor: ew-resize;
+    right: -2px;
+}
+
+.dock-right .resize-handle {
+    left: -2px;
+    right: auto;
+}
+
+.dock-bottom .resize-handle {
+    width: 100%;
+    height: 4px;
+    left: 0;
+    bottom: -2px;
+    cursor: ns-resize;
 }
 

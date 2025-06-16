@@ -53,6 +53,11 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   let isModalDragging = false;
   let modalPos = { x: 0, y: 0 };
   let dockState: DockState = "undocked";
+  let undockedSize = { width: 0, height: 0 };
+  let dockWidth = 360;
+  let dockHeight = Math.round(window.innerHeight * 0.4);
+  let isResizing = false;
+  let resizeStart!: { x: number; y: number; width: number; height: number };
 
   // Create button
   const btn = document.createElement("button");
@@ -86,6 +91,7 @@ export async function initializeFloatingButton(root: ShadowRoot) {
         <iframe allow="clipboard-read; clipboard-write"
                 src="${chrome.runtime.getURL("index.html")}"></iframe>
       </main>
+      <div class="resize-handle"></div>
     </div>
   `;
 
@@ -101,21 +107,35 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   const modalHeader = overlay.querySelector<HTMLDivElement>(
     ".sfdc-companion-modal-header",
   )!;
+  const resizeHandle = overlay.querySelector<HTMLDivElement>(
+    ".resize-handle",
+  )!;
 
   function applyDock() {
     modalContent.classList.remove("dock-left", "dock-right", "dock-bottom");
-    overlay.classList.toggle("docked", dockState !== "undocked");
     if (dockState === "left") {
       modalContent.classList.add("dock-left");
+      modalContent.style.width = `${dockWidth}px`;
+      modalContent.style.height = "100vh";
+      modalContent.style.left = "";
+      modalContent.style.top = "";
     } else if (dockState === "right") {
       modalContent.classList.add("dock-right");
+      modalContent.style.width = `${dockWidth}px`;
+      modalContent.style.height = "100vh";
+      modalContent.style.left = "";
+      modalContent.style.top = "";
     } else if (dockState === "bottom") {
       modalContent.classList.add("dock-bottom");
+      modalContent.style.width = "100vw";
+      modalContent.style.height = `${dockHeight}px`;
+      modalContent.style.left = "";
+      modalContent.style.top = "";
     } else {
-      Object.assign(modalContent.style, {
-        left: `${modalPos.x}px`,
-        top: `${modalPos.y}px`,
-      });
+      modalContent.style.width = `${undockedSize.width}px`;
+      modalContent.style.height = `${undockedSize.height}px`;
+      modalContent.style.left = `${modalPos.x}px`;
+      modalContent.style.top = `${modalPos.y}px`;
     }
     for (const btn of dockButtons) {
       btn.classList.toggle("active", btn.dataset.dock === dockState);
@@ -123,11 +143,17 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   }
 
   const openModal = () => {
-    overlay.style.display = "flex";
+    overlay.style.display = "block";
     dockState = "undocked";
+    undockedSize = {
+      width: Math.round(window.innerWidth * 0.8),
+      height: Math.round(window.innerHeight * 0.8),
+    };
+    modalContent.style.width = `${undockedSize.width}px`;
+    modalContent.style.height = `${undockedSize.height}px`;
     modalPos = {
-      x: (window.innerWidth - modalContent.offsetWidth) / 2,
-      y: (window.innerHeight - modalContent.offsetHeight) / 2,
+      x: (window.innerWidth - undockedSize.width) / 2,
+      y: (window.innerHeight - undockedSize.height) / 2,
     };
     applyDock();
   };
@@ -206,6 +232,45 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     isModalDragging = false;
   });
 
+  // ===== Modal resizing =====
+  resizeHandle.addEventListener("pointerdown", (e) => {
+    isResizing = true;
+    resizeStart = {
+      x: e.clientX,
+      y: e.clientY,
+      width: modalContent.offsetWidth,
+      height: modalContent.offsetHeight,
+    };
+    resizeHandle.setPointerCapture(e.pointerId);
+  });
+
+  resizeHandle.addEventListener("pointermove", (e) => {
+    if (!isResizing) return;
+    const dx = e.clientX - resizeStart.x;
+    const dy = e.clientY - resizeStart.y;
+    if (dockState === "left") {
+      dockWidth = Math.max(200, resizeStart.width + dx);
+      modalContent.style.width = `${dockWidth}px`;
+    } else if (dockState === "right") {
+      dockWidth = Math.max(200, resizeStart.width - dx);
+      modalContent.style.width = `${dockWidth}px`;
+    } else if (dockState === "bottom") {
+      dockHeight = Math.max(100, resizeStart.height - dy);
+      modalContent.style.height = `${dockHeight}px`;
+    } else {
+      undockedSize.width = Math.max(200, resizeStart.width + dx);
+      undockedSize.height = Math.max(100, resizeStart.height + dy);
+      modalContent.style.width = `${undockedSize.width}px`;
+      modalContent.style.height = `${undockedSize.height}px`;
+    }
+  });
+
+  resizeHandle.addEventListener("pointerup", (e) => {
+    if (!isResizing) return;
+    resizeHandle.releasePointerCapture(e.pointerId);
+    isResizing = false;
+  });
+
   // Docking via buttons
   for (const btn of dockButtons) {
     btn.addEventListener("click", () => {
@@ -225,15 +290,21 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     btn.style.top = `${position.y}px`;
     if (dockState === "undocked") {
       modalPos.x = Math.min(
-        window.innerWidth - modalContent.offsetWidth,
+        window.innerWidth - undockedSize.width,
         Math.max(0, modalPos.x),
       );
       modalPos.y = Math.min(
-        window.innerHeight - modalContent.offsetHeight,
+        window.innerHeight - undockedSize.height,
         Math.max(0, modalPos.y),
       );
       modalContent.style.left = `${modalPos.x}px`;
       modalContent.style.top = `${modalPos.y}px`;
+    } else if (dockState === "left" || dockState === "right") {
+      dockWidth = Math.min(dockWidth, window.innerWidth - 50);
+      modalContent.style.width = `${dockWidth}px`;
+    } else if (dockState === "bottom") {
+      dockHeight = Math.min(dockHeight, window.innerHeight - 50);
+      modalContent.style.height = `${dockHeight}px`;
     }
   });
 }
