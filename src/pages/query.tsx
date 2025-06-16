@@ -8,9 +8,14 @@ import {
   TableHeader,
   TableColumn,
   TableBody,
+  Chip,
   TableRow,
   TableCell,
   Tooltip,
+  ScrollShadow,
+  Popover,
+  PopoverTrigger,
+  PopoverContent,
   addToast,
 } from "@heroui/react";
 import { Icon } from "@iconify/react";
@@ -28,7 +33,7 @@ import { format as sqlFormat } from "sql-formatter";
 
 export default function SoqlQueryPage() {
   const [query, setQuery] = React.useState(
-    "SELECT Id FROM Account LIMIT 10",
+    "SELECT FIELDS(STANDARD) FROM Account LIMIT 10",
   );
   const [records, setRecords] = React.useState<any[]>([]);
   const [isLoading, setIsLoading] = React.useState(false);
@@ -126,12 +131,16 @@ export default function SoqlQueryPage() {
 
   const completionExtension = React.useMemo(() => {
     if (fields.length === 0) return [];
-    const options: Completion[] = fields.map((f) => ({ label: f, type: "property" }));
+    const options: Completion[] = fields.map((f) => ({
+      label: f,
+      type: "property",
+    }));
     return autocompletion({
       override: [
         (context: CompletionContext) => {
           const word = context.matchBefore(/\w*/);
-          if (!word || (word.from === word.to && !context.explicit)) return null;
+          if (!word || (word.from === word.to && !context.explicit))
+            return null;
           return {
             from: word.from,
             options,
@@ -141,10 +150,104 @@ export default function SoqlQueryPage() {
     });
   }, [fields]);
 
-  const columns = React.useMemo(
-    () => (records.length > 0 ? Object.keys(records[0]) : []),
-    [records],
-  );
+  const columns = React.useMemo(() => {
+    if (records.length === 0) return [];
+
+    // Filter out the 'attributes' column from the results
+    return Object.keys(records[0]).filter((key) => key !== "attributes");
+  }, [records]);
+
+  // Format cell value for display
+  const formatCellValue = React.useCallback((value: any, key: string) => {
+    if (value === null || value === undefined) {
+      return <span className="text-default-400 italic">null</span>;
+    }
+
+    if (typeof value === "object") {
+      // Handle nested objects (like relationships)
+      return (
+        <Popover placement="bottom">
+          <PopoverTrigger>
+            <Button size="sm" variant="light" className="h-6 min-w-0 px-2 py-0">
+              <span className="text-xs text-primary">{"{...}"}</span>
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent>
+            <div className="p-2 max-w-md max-h-[300px] overflow-auto">
+              <pre className="text-xs whitespace-pre-wrap break-all">
+                {JSON.stringify(value, null, 2)}
+              </pre>
+            </div>
+          </PopoverContent>
+        </Popover>
+      );
+    }
+
+    // Handle ID fields with special formatting
+    if (
+      ((key === "Id" || key.endsWith("Id")) &&
+        typeof value === "string" &&
+        value.length === 15) ||
+      value.length === 18
+    ) {
+      return (
+        <div className="flex items-center gap-1">
+          <span className="font-mono">{value}</span>
+          <Tooltip content="Copy ID">
+            <Button
+              isIconOnly
+              size="sm"
+              variant="light"
+              className="h-5 w-5 min-w-0 p-0"
+              onPress={() => {
+                navigator.clipboard.writeText(value);
+                addToast({
+                  title: "Copied",
+                  description: "ID copied to clipboard",
+                  color: "success",
+                  icon: <Icon icon="lucide:check" />,
+                });
+              }}
+            >
+              <Icon icon="lucide:copy" className="h-3 w-3" />
+            </Button>
+          </Tooltip>
+        </div>
+      );
+    }
+
+    // Handle boolean values
+    if (typeof value === "boolean") {
+      return value ? (
+        <Chip size="sm" color="success" variant="flat">
+          True
+        </Chip>
+      ) : (
+        <Chip size="sm" color="danger" variant="flat">
+          False
+        </Chip>
+      );
+    }
+
+    // Handle date values
+    if (
+      typeof value === "string" &&
+      (/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+        /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(value))
+    ) {
+      try {
+        const date = new Date(value);
+        return (
+          <span className="text-default-600">{date.toLocaleString()}</span>
+        );
+      } catch (e) {
+        // If date parsing fails, fall back to string
+        return String(value);
+      }
+    }
+
+    return String(value);
+  }, []);
 
   return (
     <div className="flex flex-col h-full">
@@ -210,44 +313,158 @@ export default function SoqlQueryPage() {
           />
         </div>
         {error && (
-          <div className="text-danger text-sm font-medium">{error}</div>
+          <div className="p-3 border border-danger-200 bg-danger-50 dark:bg-danger-900/20 dark:border-danger-700 rounded-medium text-danger text-sm">
+            <div className="flex items-start gap-2">
+              <Icon icon="lucide:alert-triangle" className="mt-0.5" />
+              <div>{error}</div>
+            </div>
+          </div>
         )}
         {isLoading ? (
-          <div className="flex justify-center p-4">
-            <Spinner />
+          <div className="flex flex-col items-center justify-center p-8">
+            <Spinner size="lg" color="primary" />
+            <p className="mt-4 text-default-500">Executing query...</p>
           </div>
         ) : records.length > 0 ? (
-          <Card className="overflow-auto">
+          <Card className="overflow-hidden">
             <CardBody className="p-0">
-              <div className="px-2 py-1 text-xs text-default-500 border-b bg-content2">
-                {records.length} row{records.length > 1 ? "s" : ""}
+              <div className="flex items-center justify-between px-3 py-2 bg-content2 border-b">
+                <div className="text-sm">
+                  <span className="font-medium">{records.length}</span>
+                  <span className="text-default-500">
+                    {" "}
+                    row{records.length > 1 ? "s" : ""} returned
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Tooltip content={copied ? "Copied!" : "Copy as JSON"}>
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      onPress={copyResults}
+                      startContent={
+                        <Icon
+                          icon={copied ? "lucide:check" : "lucide:copy"}
+                          width={16}
+                          height={16}
+                        />
+                      }
+                    >
+                      {copied ? "Copied" : "Copy Results"}
+                    </Button>
+                  </Tooltip>
+                  <Tooltip content="Export as CSV">
+                    <Button
+                      size="sm"
+                      variant="flat"
+                      onPress={() => {
+                        try {
+                          // Create CSV content
+                          const headers = columns.join(",");
+                          const rows = records.map((rec) =>
+                            columns
+                              .map((col) => {
+                                const val = rec[col];
+                                if (val === null || val === undefined)
+                                  return "";
+                                if (typeof val === "object")
+                                  return JSON.stringify(val).replace(
+                                    /"/g,
+                                    '""',
+                                  );
+                                return String(val).replace(/"/g, '""');
+                              })
+                              .join(","),
+                          );
+                          const csv = [headers, ...rows].join("\n");
+
+                          // Create download link
+                          const blob = new Blob([csv], { type: "text/csv" });
+                          const url = URL.createObjectURL(blob);
+                          const a = document.createElement("a");
+                          a.href = url;
+                          a.download = `soql_export_${new Date().toISOString().slice(0, 10)}.csv`;
+                          document.body.appendChild(a);
+                          a.click();
+                          document.body.removeChild(a);
+                          URL.revokeObjectURL(url);
+
+                          addToast({
+                            title: "Exported",
+                            description: "Data exported as CSV",
+                            color: "success",
+                            icon: <Icon icon="lucide:check" />,
+                          });
+                        } catch (err) {
+                          console.error("Failed to export CSV", err);
+                          addToast({
+                            title: "Error",
+                            description: "Failed to export CSV",
+                            color: "danger",
+                            icon: <Icon icon="lucide:alert-triangle" />,
+                          });
+                        }
+                      }}
+                      startContent={
+                        <Icon icon="lucide:download" width={16} height={16} />
+                      }
+                    >
+                      Export CSV
+                    </Button>
+                  </Tooltip>
+                </div>
               </div>
-              <Table
-                removeWrapper
-                isHeaderSticky
-                classNames={{ base: "overflow-auto", table: "min-w-full" }}
-              >
-                <TableHeader>
-                  {columns.map((c) => (
-                    <TableColumn key={c}>{c}</TableColumn>
-                  ))}
-                </TableHeader>
-                <TableBody>
-                  {records.map((rec, idx) => (
-                    <TableRow key={idx}>
-                      {columns.map((c) => (
-                        <TableCell key={c} className="text-xs">
-                          {String(rec[c])}
-                        </TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+
+              <ScrollShadow className="max-h-[calc(100vh-350px)]">
+                <Table
+                  removeWrapper
+                  isHeaderSticky
+                  aria-label="SOQL Query Results"
+                  classNames={{
+                    base: "overflow-auto",
+                    table: "min-w-full",
+                    th: "bg-default-50 dark:bg-default-100/20 text-default-600 text-xs sticky top-0 z-10",
+                    td: "py-2",
+                  }}
+                >
+                  <TableHeader>
+                    {columns.map((c) => (
+                      <TableColumn key={c} className="font-medium">
+                        {c}
+                      </TableColumn>
+                    ))}
+                  </TableHeader>
+                  <TableBody>
+                    {records.map((rec, idx) => (
+                      <TableRow
+                        key={idx}
+                        className="hover:bg-default-50 dark:hover:bg-default-100/10"
+                      >
+                        {columns.map((c) => (
+                          <TableCell key={c} className="text-xs font-mono">
+                            {formatCellValue(rec[c], c)}
+                          </TableCell>
+                        ))}
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </ScrollShadow>
             </CardBody>
           </Card>
         ) : (
-          <div className="text-sm text-default-500">No results</div>
+          <div className="flex flex-col items-center justify-center p-12 border border-dashed border-default-200 rounded-large">
+            <Icon
+              icon="lucide:database"
+              className="w-12 h-12 text-default-300 mb-4"
+            />
+            <p className="text-default-500 text-center">
+              No results to display
+            </p>
+            <p className="text-xs text-default-400 text-center mt-1">
+              Run a query to see results here
+            </p>
+          </div>
         )}
       </div>
     </div>

@@ -73,6 +73,7 @@ function lruGet(key: string) {
 
 function freshConnection(meta: TabMeta) {
   return new Connection({
+    version: "60.0",
     instanceUrl: meta.instanceUrl,
     sessionId: meta.sessionId,
   });
