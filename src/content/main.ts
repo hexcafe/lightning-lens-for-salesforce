@@ -53,13 +53,6 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   let isModalDragging = false;
   let modalPos = { x: 0, y: 0 };
   let dockState: DockState = "undocked";
-  const dockCycle: DockState[] = ["undocked", "right", "bottom", "left"];
-  const dockIcons: Record<DockState, string> = {
-    undocked: "\u21F6", // dock right
-    right: "\u21F7", // dock bottom
-    bottom: "\u21F5", // dock left
-    left: "\u2B1A", // undock
-  };
 
   // Create button
   const btn = document.createElement("button");
@@ -81,7 +74,12 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   overlay.innerHTML = /* html */ `
     <div class="sfdc-companion-modal-content">
       <div class="sfdc-companion-modal-header">
-        <button class="dock-btn" title="Toggle Dock">\u2399</button>
+        <div class="dock-buttons">
+          <button class="dock-btn" data-dock="left" title="Dock left">\u2B05</button>
+          <button class="dock-btn" data-dock="bottom" title="Dock bottom">\u2B07</button>
+          <button class="dock-btn" data-dock="right" title="Dock right">\u27A1</button>
+          <button class="dock-btn" data-dock="undocked" title="Undock">\u26F6</button>
+        </div>
         <button class="close-btn">&times;</button>
       </div>
       <main class="sfdc-companion-modal-body">
@@ -97,7 +95,9 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     ".sfdc-companion-modal-content",
   )!;
   const closeBtn = overlay.querySelector<HTMLButtonElement>(".close-btn")!;
-  const dockBtn = overlay.querySelector<HTMLButtonElement>(".dock-btn")!;
+  const dockButtons = Array.from(
+    overlay.querySelectorAll<HTMLButtonElement>(".dock-btn"),
+  );
   const modalHeader = overlay.querySelector<HTMLDivElement>(
     ".sfdc-companion-modal-header",
   )!;
@@ -117,25 +117,22 @@ export async function initializeFloatingButton(root: ShadowRoot) {
         top: `${modalPos.y}px`,
       });
     }
-    const current = dockCycle.indexOf(dockState);
-    const next = dockCycle[(current + 1) % dockCycle.length];
-    dockBtn.textContent = dockIcons[next];
+    for (const btn of dockButtons) {
+      btn.classList.toggle("active", btn.dataset.dock === dockState);
+    }
   }
 
   const openModal = () => {
     overlay.style.display = "flex";
-    document.body.style.overflow = "hidden";
     dockState = "undocked";
     modalPos = {
       x: (window.innerWidth - modalContent.offsetWidth) / 2,
       y: (window.innerHeight - modalContent.offsetHeight) / 2,
     };
-    dockBtn.textContent = dockIcons[dockCycle[1]];
     applyDock();
   };
   const closeModal = () => {
     overlay.style.display = "none";
-    document.body.style.overflow = "";
   };
 
   // Pointer down: begin drag
@@ -182,6 +179,7 @@ export async function initializeFloatingButton(root: ShadowRoot) {
   // ===== Modal dragging =====
   modalHeader.addEventListener("pointerdown", (e) => {
     if (dockState !== "undocked") return;
+    if ((e.target as HTMLElement).closest(".dock-btn")) return;
     isModalDragging = true;
     modalDragStart = {
       x: e.clientX,
@@ -208,17 +206,16 @@ export async function initializeFloatingButton(root: ShadowRoot) {
     isModalDragging = false;
   });
 
-  // Cycle docking positions
-  dockBtn.addEventListener("click", () => {
-    const idx = dockCycle.indexOf(dockState);
-    dockState = dockCycle[(idx + 1) % dockCycle.length];
-    applyDock();
-  });
+  // Docking via buttons
+  for (const btn of dockButtons) {
+    btn.addEventListener("click", () => {
+      dockState = btn.dataset.dock as DockState;
+      applyDock();
+    });
+  }
 
   // Modal close handlers
   closeBtn.addEventListener("click", closeModal);
-  overlay.addEventListener("click", closeModal);
-  modalContent.addEventListener("click", (e) => e.stopPropagation());
 
   // Window resize: keep button in view
   window.addEventListener("resize", () => {
